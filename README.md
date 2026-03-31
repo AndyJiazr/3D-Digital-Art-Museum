@@ -3,10 +3,7 @@
 A web-based application that allows users to interactively explore cultural artifacts in **3D**, including rotation, zoom, and detailed viewing, supported by concise and easy-to-understand explanations.
 
 ---
-
-# 📅 Week 4 Development Log
-
-## 🔹 Sprint Goal
+# 🔹 Sprint Goal
 Develop a **basic functional prototype** of the 3D artifact viewer, including:
 - Loading and displaying a 3D model  
 - Implementing user interactions (rotate, zoom)  
