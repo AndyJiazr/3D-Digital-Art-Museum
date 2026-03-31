@@ -27,15 +27,15 @@ Develop a **basic functional prototype** of the 3D artifact viewer, including:
 
 ## 🔹 Team Role Assignments
 
-| Role | Main responsibility | Assessed through |
+| Role | Main responsibility | Person |
 |------|--------------------|------------------|
-| Product Manager | Sprint goals, standups, team direction | Dev Log quality, Checkpoint prep |
-| UX / UI Designer | Figma mockups, user flows, visual design | Evidence links, usability test results |
-| Frontend Developer | What users see — screens, buttons, interactions | GitHub commits, working features |
-| Backend Developer | Data, APIs, server logic | GitHub commits, Technical Documentation |
-| User Researcher | Interviews, usability sessions, findings | Validation Report, interview notes |
-| Technical Lead | Architecture decisions, code quality, repo | Technical Documentation, code review |
-| Documentation & IP | Dev Log quality, Technical Docs, IP section | Dev Log, Week 11 Portfolio |
+| Product Manager | Sprint goals, standups, team direction | Tianlan Pan |
+| UX / UI Designer | Figma mockups, user flows, visual design | Yingxia Yao |
+| Frontend Developer | What users see — screens, buttons, interactions | Zhengwei Wang |
+| Backend Developer | Data, APIs, server logic | Weijun Yan & Zhuoran Jia |
+| User Researcher | Interviews, usability sessions, findings | Xinyu Zhang |
+| Technical Lead | Architecture decisions, code quality, repo | Shan Liang |
+| Documentation & IP | Dev Log quality, Technical Docs, IP section | Yitong Chao |
 
 ---
 
