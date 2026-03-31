@@ -9,6 +9,12 @@ Develop a **basic functional prototype** of the 3D artifact viewer, including:
 - Implementing user interactions (rotate, zoom)  
 - Displaying artifact descriptions  
 
+## Mission List
+ - UI Design (to do)
+ - Code Design (doing)
+ - Database Design (to do)
+ - HTML Design (to do)
+ - Basic Structure (done)
 ---
 
 ## 🔹 Must-have Features
