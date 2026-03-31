@@ -114,14 +114,6 @@ Build a website that allows users to:
 
 ---
 
-## 🔹 Individual Contribution
-
-**Name:** [Your Name]  
-
-During this session, I integrated Three.js into the React framework and implemented the initial 3D model viewer. I also configured interaction controls including rotation and zoom, ensuring that users can intuitively explore artifacts.
-
----
-
 ## 🔹 Project Status
 
 **🟢 On Track**
