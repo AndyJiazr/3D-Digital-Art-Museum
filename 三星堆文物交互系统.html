@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>三星堆 OBJ 简洁版</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/OBJLoader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <style>
+        :root {
+            color-scheme: dark;
+            --bg: #0d1117;
+            --panel: rgba(18, 24, 34, 0.84);
+            --border: rgba(255, 255, 255, 0.12);
+            --text: #edf2f7;
+            --muted: rgba(237, 242, 247, 0.62);
+            --accent: #c89b3c;
+            --accent-soft: rgba(200, 155, 60, 0.16);
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            overflow: hidden;
+            font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+            background:
+                radial-gradient(circle at top, rgba(200, 155, 60, 0.14), transparent 30%),
+                linear-gradient(180deg, #11161d 0%, var(--bg) 100%);
+            color: var(--text);
+        }
+
+        #viewer {
+            position: fixed;
+            inset: 0;
+        }
+
+        .panel {
+            position: fixed;
+            top: 24px;
+            left: 24px;
+            width: min(360px, calc(100vw - 48px));
+            padding: 22px;
+            border: 1px solid var(--border);
+            border-radius: 18px;
+            background: var(--panel);
+            backdrop-filter: blur(14px);
+            z-index: 10;
+        }
+
+        .title {
+            margin: 0 0 8px;
+            font-size: 24px;
+            font-weight: 600;
+            letter-spacing: 0.04em;
+        }
+
+        .desc {
+            margin: 0 0 18px;
+            line-height: 1.6;
+            font-size: 14px;
+            color: var(--muted);
+        }
+
+        .upload {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            min-height: 50px;
+            border: 1px dashed rgba(200, 155, 60, 0.55);
+            border-radius: 14px;
+            background: var(--accent-soft);
+            color: var(--text);
+            cursor: pointer;
+            transition: 0.2s ease;
+            text-align: center;
+            font-size: 14px;
+        }
+
+        .upload:hover {
+            border-color: var(--accent);
+            background: rgba(200, 155, 60, 0.24);
+        }
+
+        .upload input {
+            display: none;
+        }
+
+        .meta {
+            margin-top: 16px;
+            display: grid;
+            gap: 10px;
+        }
+
+        .meta-item {
+            padding: 12px 14px;
+            border-radius: 12px;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .meta-label {
+            display: block;
+            margin-bottom: 4px;
+            font-size: 12px;
+            color: var(--muted);
+        }
+
+        .meta-value {
+            font-size: 14px;
+            word-break: break-all;
+        }
+
+        .tips {
+            position: fixed;
+            right: 24px;
+            bottom: 24px;
+            padding: 12px 14px;
+            border-radius: 14px;
+            background: rgba(12, 16, 24, 0.72);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            color: var(--muted);
+            font-size: 13px;
+            z-index: 10;
+        }
+
+        .drop-mask {
+            position: fixed;
+            inset: 0;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            background: rgba(8, 11, 16, 0.56);
+            backdrop-filter: blur(4px);
+            z-index: 20;
+        }
+
+        .drop-mask.active {
+            display: flex;
+        }
+
+        .drop-box {
+            padding: 28px 36px;
+            border: 1px dashed rgba(255, 255, 255, 0.32);
+            border-radius: 18px;
+            background: rgba(15, 20, 28, 0.88);
+            color: var(--text);
+            font-size: 18px;
+        }
+    </style>
+</head>
+<body>
+    <div id="viewer"></div>
+
+    <section class="panel">
+        <h1 class="title">三星堆文物交互系统</h1>
+        <p class="desc">支持点击上传，也支持将 `.obj` 文件直接拖入页面。</p>
+        <label class="upload">
+            <span>导入 OBJ 文件</span>
+            <input id="file-input" type="file" accept=".obj">
+        </label>
+        <div class="meta">
+            <div class="meta-item">
+                <span class="meta-label">当前文件</span>
+                <span id="file-name" class="meta-value">未导入</span>
+            </div>
+            <div class="meta-item">
+                <span class="meta-label">状态</span>
+                <span id="status" class="meta-value">等待导入 OBJ 文件</span>
+            </div>
+        </div>
+    </section>
+
+    <div class="tips">鼠标左键旋转，滚轮缩放，右键平移</div>
+
+    <div id="drop-mask" class="drop-mask">
+        <div class="drop-box">松开鼠标即可导入 OBJ 文件</div>
+    </div>
+
+    <script>
+        let scene;
+        let camera;
+        let renderer;
+        let controls;
+        let currentModel = null;
+
+        const viewer = document.getElementById("viewer");
+        const fileInput = document.getElementById("file-input");
+        const fileNameText = document.getElementById("file-name");
+        const statusText = document.getElementById("status");
+        const dropMask = document.getElementById("drop-mask");
+
+        initScene();
+        bindEvents();
+        animate();
+
+        function initScene() {
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x0d1117);
+
+            camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 2000);
+            camera.position.set(0, 18, 90);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setPixelRatio(window.devicePixelRatio);
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            viewer.appendChild(renderer.domElement);
+
+            controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.05;
+            controls.target.set(0, 0, 0);
+
+            const ambientLight = new THREE.HemisphereLight(0xffffff, 0x1a1f29, 1.1);
+            scene.add(ambientLight);
+
+            const keyLight = new THREE.DirectionalLight(0xfff3d6, 1.0);
+            keyLight.position.set(30, 40, 20);
+            scene.add(keyLight);
+
+            const fillLight = new THREE.DirectionalLight(0x9ec5ff, 0.35);
+            fillLight.position.set(-20, 10, -20);
+            scene.add(fillLight);
+
+            const grid = new THREE.GridHelper(140, 20, 0x5d6673, 0x2a313c);
+            grid.position.y = -20;
+            grid.material.opacity = 0.22;
+            grid.material.transparent = true;
+            scene.add(grid);
+        }
+
+        function bindEvents() {
+            window.addEventListener("resize", onResize);
+            fileInput.addEventListener("change", (event) => {
+                const file = event.target.files[0];
+                if (file) {
+                    loadObjFile(file);
+                }
+            });
+
+            window.addEventListener("dragover", (event) => {
+                event.preventDefault();
+                dropMask.classList.add("active");
+            });
+
+            window.addEventListener("dragleave", (event) => {
+                if (event.clientX <= 0 || event.clientY <= 0 || event.clientX >= window.innerWidth || event.clientY >= window.innerHeight) {
+                    dropMask.classList.remove("active");
+                }
+            });
+
+            window.addEventListener("drop", (event) => {
+                event.preventDefault();
+                dropMask.classList.remove("active");
+                const file = Array.from(event.dataTransfer.files).find((item) => item.name.toLowerCase().endsWith(".obj"));
+                if (file) {
+                    loadObjFile(file);
+                } else {
+                    setStatus("只支持导入 .obj 文件");
+                }
+            });
+        }
+
+        function loadObjFile(file) {
+            fileNameText.textContent = file.name;
+            setStatus("正在解析模型...");
+
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                try {
+                    const loader = new THREE.OBJLoader();
+                    const object = loader.parse(event.target.result);
+                    showModel(object);
+                    setStatus("导入成功");
+                } catch (error) {
+                    console.error(error);
+                    setStatus("导入失败，请确认 OBJ 文件格式正确");
+                }
+            };
+            reader.onerror = () => {
+                setStatus("文件读取失败");
+            };
+            reader.readAsText(file);
+        }
+
+        function showModel(object) {
+            if (currentModel) {
+                scene.remove(currentModel);
+            }
+
+            object.traverse((child) => {
+                if (child.isMesh) {
+                    child.geometry.computeVertexNormals();
+                    child.material = new THREE.MeshStandardMaterial({
+                        color: 0xc7a15a,
+                        metalness: 0.18,
+                        roughness: 0.72
+                    });
+                    child.castShadow = false;
+                    child.receiveShadow = false;
+                }
+            });
+
+            const box = new THREE.Box3().setFromObject(object);
+            const center = box.getCenter(new THREE.Vector3());
+            const size = box.getSize(new THREE.Vector3());
+            const maxSize = Math.max(size.x, size.y, size.z) || 1;
+            const scale = 42 / maxSize;
+
+            object.position.sub(center);
+            object.scale.setScalar(scale);
+
+            const scaledBox = new THREE.Box3().setFromObject(object);
+            const scaledCenter = scaledBox.getCenter(new THREE.Vector3());
+            const scaledSize = scaledBox.getSize(new THREE.Vector3());
+
+            object.position.x -= scaledCenter.x;
+            object.position.y -= scaledCenter.y;
+            object.position.z -= scaledCenter.z;
+            object.position.y -= scaledSize.y * 0.2;
+
+            currentModel = object;
+            scene.add(currentModel);
+
+            const fitDistance = Math.max(scaledSize.x, scaledSize.y, scaledSize.z) * 1.8;
+            camera.position.set(fitDistance * 0.55, fitDistance * 0.4, fitDistance);
+            controls.target.set(0, 0, 0);
+            controls.update();
+        }
+
+        function setStatus(text) {
+            statusText.textContent = text;
+        }
+
+        function onResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+        }
+    </script>
+</body>
+</html>
