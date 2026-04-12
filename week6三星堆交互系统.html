@@ -1,0 +1,693 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>week6三星堆交互系统</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/OBJLoader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/EffectComposer.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/Pass.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/RenderPass.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/ShaderPass.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/CopyShader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/LuminosityHighPassShader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/UnrealBloomPass.js"></script>
+    <style>
+        :root {
+            --bg: #000406;
+            --panel: rgba(10, 18, 24, 0.78);
+            --panel-border: rgba(255, 255, 255, 0.1);
+            --text: rgba(255, 255, 255, 0.92);
+            --muted: rgba(255, 255, 255, 0.56);
+            --cyan: #00ffcc;
+            --gold: #d8b15d;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            overflow: hidden;
+            background: var(--bg);
+            color: var(--text);
+            font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+            cursor: crosshair;
+        }
+
+        canvas {
+            display: block;
+        }
+
+        #canvas-container {
+            position: fixed;
+            inset: 0;
+        }
+
+        .scanline {
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+            opacity: 0.22;
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 255, 204, 0.02) 50%);
+            background-size: 100% 4px;
+        }
+
+        .panel {
+            position: fixed;
+            top: 24px;
+            left: 24px;
+            width: min(360px, calc(100vw - 48px));
+            padding: 22px;
+            border-radius: 22px;
+            background: linear-gradient(135deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.02));
+            border: 1px solid var(--panel-border);
+            backdrop-filter: blur(22px);
+            z-index: 10;
+        }
+
+        .top-line {
+            width: 52px;
+            height: 2px;
+            margin-bottom: 14px;
+            background: var(--gold);
+        }
+
+        .title {
+            margin: 0;
+            font-size: 28px;
+            font-weight: 300;
+            letter-spacing: 0.3em;
+            text-transform: uppercase;
+        }
+
+        .subtitle {
+            margin: 10px 0 18px;
+            font-size: 13px;
+            letter-spacing: 0.12em;
+            color: var(--muted);
+        }
+
+        .desc {
+            margin: 0 0 18px;
+            font-size: 13px;
+            line-height: 1.7;
+            color: var(--muted);
+        }
+
+        .controls {
+            display: grid;
+            gap: 10px;
+        }
+
+        .button,
+        .upload-label {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            min-height: 46px;
+            padding: 0 14px;
+            border-radius: 14px;
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            background: rgba(255, 255, 255, 0.04);
+            color: var(--text);
+            font-size: 14px;
+            cursor: pointer;
+            transition: 0.25s ease;
+        }
+
+        .button:hover,
+        .upload-label:hover {
+            border-color: rgba(0, 255, 204, 0.42);
+            background: rgba(0, 255, 204, 0.08);
+        }
+
+        .upload-label input {
+            display: none;
+        }
+
+        .meta {
+            margin-top: 16px;
+            display: grid;
+            gap: 10px;
+        }
+
+        .meta-item {
+            padding: 12px 14px;
+            border-radius: 14px;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .meta-label {
+            display: block;
+            margin-bottom: 6px;
+            font-size: 11px;
+            letter-spacing: 0.16em;
+            color: var(--muted);
+            text-transform: uppercase;
+        }
+
+        .meta-value {
+            font-size: 14px;
+            word-break: break-all;
+        }
+
+        .model-list {
+            margin-top: 14px;
+            display: grid;
+            gap: 8px;
+            max-height: 220px;
+            overflow-y: auto;
+        }
+
+        .model-item {
+            width: 100%;
+            padding: 12px 14px;
+            border-radius: 14px;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            background: rgba(255, 255, 255, 0.03);
+            color: var(--text);
+            text-align: left;
+            cursor: pointer;
+            transition: 0.25s ease;
+        }
+
+        .model-item:hover,
+        .model-item.active {
+            border-color: rgba(0, 255, 204, 0.42);
+            background: rgba(0, 255, 204, 0.08);
+        }
+
+        .tips {
+            position: fixed;
+            right: 24px;
+            bottom: 24px;
+            max-width: min(360px, calc(100vw - 48px));
+            padding: 14px 16px;
+            border-radius: 16px;
+            background: var(--panel);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            backdrop-filter: blur(18px);
+            z-index: 10;
+            color: var(--muted);
+            font-size: 13px;
+            line-height: 1.7;
+        }
+
+        .drop-mask {
+            position: fixed;
+            inset: 0;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 20;
+            background: rgba(0, 4, 6, 0.42);
+            backdrop-filter: blur(5px);
+        }
+
+        .drop-mask.active {
+            display: flex;
+        }
+
+        .drop-box {
+            padding: 28px 34px;
+            border-radius: 20px;
+            border: 1px dashed rgba(255, 255, 255, 0.26);
+            background: rgba(10, 18, 24, 0.84);
+            color: var(--text);
+            font-size: 16px;
+            letter-spacing: 0.08em;
+        }
+
+        @media (max-width: 768px) {
+            .panel {
+                top: 16px;
+                left: 16px;
+                width: calc(100vw - 32px);
+                padding: 18px;
+            }
+
+            .title {
+                font-size: 22px;
+                letter-spacing: 0.22em;
+            }
+
+            .tips {
+                left: 16px;
+                right: 16px;
+                bottom: 16px;
+                max-width: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="canvas-container"></div>
+    <div class="scanline"></div>
+
+    <section class="panel">
+        <div class="top-line"></div>
+        <h1 class="title">Sanxingdui</h1>
+        <p class="subtitle">week6 三星堆交互系统</p>
+        <p class="desc">具有两个核心功能：星云待机效果与 OBJ 文件导入。导入后可点击列表切换模型，也可以一键返回星云模式。</p>
+
+        <div class="controls">
+            <label class="upload-label">
+                <span>导入 OBJ 文件</span>
+                <input id="file-input" type="file" multiple accept=".obj">
+            </label>
+            <button id="nebula-btn" class="button" type="button">切换到星云模式</button>
+        </div>
+
+        <div class="meta">
+            <div class="meta-item">
+                <span class="meta-label">当前状态</span>
+                <span id="status-text" class="meta-value">星云待机模式</span>
+            </div>
+            <div class="meta-item">
+                <span class="meta-label">当前对象</span>
+                <span id="asset-name" class="meta-value">星云待机模式</span>
+            </div>
+        </div>
+
+        <div id="model-list" class="model-list"></div>
+    </section>
+
+    <div class="tips">操作提示：按住鼠标左键旋转，滚轮缩放。支持点击上传，也支持将 .obj 文件直接拖入页面。</div>
+
+    <div id="drop-mask" class="drop-mask">
+        <div class="drop-box">松开鼠标即可导入 OBJ 文件</div>
+    </div>
+
+    <script>
+        const config = {
+            count: 200000,
+            colors: { dark: 0x000406 }
+        };
+
+        let scene;
+        let camera;
+        let renderer;
+        let composer;
+        let points;
+
+        let currentRotationY = 0;
+        let isDragging = false;
+        let lastMouseX = 0;
+        let lerpScale = 1.0;
+        let targetScale = 1.0;
+
+        let models = [];
+        let activeModelIndex = -1;
+
+        const targetPositions = new Float32Array(config.count * 3);
+        const targetColors = new Float32Array(config.count * 3);
+        const targetSizes = new Float32Array(config.count);
+
+        const fileInput = document.getElementById("file-input");
+        const modelList = document.getElementById("model-list");
+        const statusText = document.getElementById("status-text");
+        const assetName = document.getElementById("asset-name");
+        const nebulaBtn = document.getElementById("nebula-btn");
+        const dropMask = document.getElementById("drop-mask");
+
+        initApp();
+        bindEvents();
+
+        function initApp() {
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(config.colors.dark);
+
+            camera = new THREE.PerspectiveCamera(25, window.innerWidth / window.innerHeight, 0.1, 2000);
+            camera.position.z = 180;
+
+            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+            renderer.setPixelRatio(window.devicePixelRatio);
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            document.getElementById("canvas-container").appendChild(renderer.domElement);
+
+            composer = new THREE.EffectComposer(renderer);
+            composer.addPass(new THREE.RenderPass(scene, camera));
+            composer.addPass(new THREE.UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 1.2, 0.5, 0.8));
+
+            const geometry = new THREE.BufferGeometry();
+            const positions = new Float32Array(config.count * 3);
+            const colors = new Float32Array(config.count * 3);
+            const sizes = new Float32Array(config.count);
+
+            for (let i = 0; i < config.count; i++) {
+                const i3 = i * 3;
+                positions[i3] = (Math.random() - 0.5) * 800;
+                positions[i3 + 1] = (Math.random() - 0.5) * 800;
+                positions[i3 + 2] = (Math.random() - 0.5) * 800;
+
+                targetPositions[i3] = positions[i3];
+                targetPositions[i3 + 1] = positions[i3 + 1];
+                targetPositions[i3 + 2] = positions[i3 + 2];
+
+                colors[i3] = 0.1;
+                colors[i3 + 1] = 0.4;
+                colors[i3 + 2] = 0.6;
+
+                targetColors[i3] = colors[i3];
+                targetColors[i3 + 1] = colors[i3 + 1];
+                targetColors[i3 + 2] = colors[i3 + 2];
+
+                sizes[i] = Math.random() < 0.05 ? 0.35 : 0.08;
+                targetSizes[i] = sizes[i];
+            }
+
+            geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+            geometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+            geometry.setAttribute("size", new THREE.BufferAttribute(sizes, 1));
+
+            points = new THREE.Points(
+                geometry,
+                new THREE.ShaderMaterial({
+                    uniforms: {
+                        uRotation: { value: 0 },
+                        uScale: { value: 1.0 }
+                    },
+                    vertexShader: `
+                        attribute float size;
+                        attribute vec3 color;
+                        varying vec3 vColor;
+                        uniform float uRotation;
+                        uniform float uScale;
+
+                        void main() {
+                            vColor = color;
+                            vec3 pos = position * uScale;
+                            float s = sin(uRotation);
+                            float c = cos(uRotation);
+                            mat2 rot = mat2(c, -s, s, c);
+                            pos.xz = rot * pos.xz;
+                            vec4 mvPosition = modelViewMatrix * vec4(pos, 1.0);
+                            gl_PointSize = size * (2000.0 / -mvPosition.z);
+                            gl_Position = projectionMatrix * mvPosition;
+                        }
+                    `,
+                    fragmentShader: `
+                        varying vec3 vColor;
+
+                        void main() {
+                            float d = distance(gl_PointCoord, vec2(0.5));
+                            if (d > 0.5) discard;
+                            gl_FragColor = vec4(vColor, (1.0 - d * 2.0) * 0.8);
+                        }
+                    `,
+                    transparent: true,
+                    blending: THREE.AdditiveBlending,
+                    depthWrite: false
+                })
+            );
+
+            scene.add(points);
+            setNebulaMode();
+            animate();
+        }
+
+        function bindEvents() {
+            window.addEventListener("resize", onResize);
+
+            window.addEventListener("mousedown", (event) => {
+                if (event.button === 0) {
+                    isDragging = true;
+                    lastMouseX = event.clientX;
+                }
+            });
+
+            window.addEventListener("mousemove", (event) => {
+                if (isDragging) {
+                    currentRotationY += (event.clientX - lastMouseX) * 0.005;
+                    lastMouseX = event.clientX;
+                }
+            });
+
+            window.addEventListener("mouseup", () => {
+                isDragging = false;
+            });
+
+            window.addEventListener("wheel", (event) => {
+                targetScale -= event.deltaY * 0.001;
+                targetScale = Math.max(0.3, Math.min(3.0, targetScale));
+            }, { passive: true });
+
+            fileInput.addEventListener("change", (event) => {
+                handleFileUpload(event.target.files);
+                event.target.value = "";
+            });
+
+            nebulaBtn.addEventListener("click", () => {
+                setNebulaMode();
+                renderModelList();
+            });
+
+            window.addEventListener("dragover", (event) => {
+                event.preventDefault();
+                dropMask.classList.add("active");
+            });
+
+            window.addEventListener("dragleave", (event) => {
+                if (event.clientX <= 0 || event.clientY <= 0 || event.clientX >= window.innerWidth || event.clientY >= window.innerHeight) {
+                    dropMask.classList.remove("active");
+                }
+            });
+
+            window.addEventListener("drop", (event) => {
+                event.preventDefault();
+                dropMask.classList.remove("active");
+                const files = Array.from(event.dataTransfer.files).filter((file) => file.name.toLowerCase().endsWith(".obj"));
+                if (files.length > 0) {
+                    handleFileUpload(files);
+                } else {
+                    setStatus("只支持导入 .obj 文件");
+                }
+            });
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            if (!isDragging) {
+                currentRotationY += 0.0012;
+            }
+
+            lerpScale += (targetScale - lerpScale) * 0.1;
+            points.material.uniforms.uRotation.value = currentRotationY;
+            points.material.uniforms.uScale.value = lerpScale;
+
+            const positionArray = points.geometry.attributes.position.array;
+            const colorArray = points.geometry.attributes.color.array;
+            const sizeArray = points.geometry.attributes.size.array;
+
+            for (let i = 0; i < config.count; i++) {
+                const i3 = i * 3;
+
+                positionArray[i3] += (targetPositions[i3] - positionArray[i3]) * 0.06;
+                positionArray[i3 + 1] += (targetPositions[i3 + 1] - positionArray[i3 + 1]) * 0.06;
+                positionArray[i3 + 2] += (targetPositions[i3 + 2] - positionArray[i3 + 2]) * 0.06;
+
+                colorArray[i3] += (targetColors[i3] - colorArray[i3]) * 0.04;
+                colorArray[i3 + 1] += (targetColors[i3 + 1] - colorArray[i3 + 1]) * 0.04;
+                colorArray[i3 + 2] += (targetColors[i3 + 2] - colorArray[i3 + 2]) * 0.04;
+
+                sizeArray[i] += (targetSizes[i] - sizeArray[i]) * 0.06;
+            }
+
+            points.geometry.attributes.position.needsUpdate = true;
+            points.geometry.attributes.color.needsUpdate = true;
+            points.geometry.attributes.size.needsUpdate = true;
+
+            composer.render();
+        }
+
+        function setNebulaMode() {
+            activeModelIndex = -1;
+            targetScale = 1.0;
+            assetName.textContent = "星云待机模式";
+            setStatus("星云待机模式");
+
+            for (let i = 0; i < config.count; i++) {
+                const i3 = i * 3;
+                const r = 50 + Math.random() * 100;
+                const theta = Math.random() * Math.PI * 2;
+                const phi = Math.acos(Math.random() * 2 - 1);
+                const isGold = Math.random() > 0.85;
+
+                targetPositions[i3] = r * Math.sin(phi) * Math.cos(theta);
+                targetPositions[i3 + 1] = r * Math.sin(phi) * Math.sin(theta);
+                targetPositions[i3 + 2] = r * Math.cos(phi);
+
+                targetColors[i3] = isGold ? 0.6 : 0.0;
+                targetColors[i3 + 1] = isGold ? 0.5 : 0.4;
+                targetColors[i3 + 2] = isGold ? 0.1 : 0.3;
+                targetSizes[i] = Math.random() < 0.05 ? 0.35 : 0.08;
+            }
+        }
+
+        function handleFileUpload(fileList) {
+            const loader = new THREE.OBJLoader();
+            const files = Array.from(fileList);
+
+            if (files.length === 0) {
+                return;
+            }
+
+            setStatus("正在读取 OBJ 文件...");
+
+            let firstNewIndex = null;
+
+            files.forEach((file) => {
+                if (!file.name.toLowerCase().endsWith(".obj")) {
+                    return;
+                }
+
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    try {
+                        const group = loader.parse(event.target.result);
+                        const modelData = {
+                            id: Date.now() + Math.random(),
+                            name: file.name.replace(/\.obj$/i, ""),
+                            group
+                        };
+
+                        models.push(modelData);
+                        if (firstNewIndex === null) {
+                            firstNewIndex = models.length - 1;
+                        }
+
+                        renderModelList();
+
+                        if (firstNewIndex !== null && modelData === models[firstNewIndex]) {
+                            reconstructModel(firstNewIndex);
+                        }
+                    } catch (error) {
+                        console.error(error);
+                        setStatus("OBJ 解析失败，请检查文件内容");
+                    }
+                };
+
+                reader.onerror = () => {
+                    setStatus("OBJ 文件读取失败");
+                };
+
+                reader.readAsText(file);
+            });
+        }
+
+        function reconstructModel(index) {
+            const modelData = models[index];
+            if (!modelData) {
+                return;
+            }
+
+            modelData.group.updateMatrixWorld(true);
+            activeModelIndex = index;
+            assetName.textContent = modelData.name;
+            setStatus("已切换到模型形态");
+
+            const samplerPoints = [];
+
+            modelData.group.traverse((child) => {
+                if (!child.isMesh || !child.geometry || !child.geometry.attributes || !child.geometry.attributes.position) {
+                    return;
+                }
+
+                const positionAttr = child.geometry.attributes.position;
+                for (let i = 0; i < positionAttr.count; i++) {
+                    samplerPoints.push(
+                        new THREE.Vector3()
+                            .fromBufferAttribute(positionAttr, i)
+                            .applyMatrix4(child.matrixWorld)
+                    );
+                }
+            });
+
+            if (samplerPoints.length === 0) {
+                setStatus("该 OBJ 文件没有可用的顶点数据");
+                return;
+            }
+
+            const box = new THREE.Box3().setFromObject(modelData.group);
+            const center = box.getCenter(new THREE.Vector3());
+            const size = box.getSize(new THREE.Vector3());
+            const maxAxis = Math.max(size.x, size.y, size.z) || 1;
+            const scale = 55 / maxAxis;
+            const bodyCount = Math.floor(config.count * 0.9);
+
+            targetScale = 1.0;
+
+            for (let i = 0; i < config.count; i++) {
+                const i3 = i * 3;
+
+                if (i < bodyCount) {
+                    const point = samplerPoints[Math.floor(Math.random() * samplerPoints.length)];
+                    const jitter = 0.02;
+                    const isGold = Math.random() > 0.75;
+                    const randomSize = Math.random();
+
+                    targetPositions[i3] = (point.x - center.x) * scale + (Math.random() - 0.5) * jitter;
+                    targetPositions[i3 + 1] = (point.y - center.y) * scale + (Math.random() - 0.5) * jitter;
+                    targetPositions[i3 + 2] = (point.z - center.z) * scale + (Math.random() - 0.5) * jitter;
+
+                    targetColors[i3] = isGold ? 1.0 : 0.05;
+                    targetColors[i3 + 1] = isGold ? 0.85 : 0.95;
+                    targetColors[i3 + 2] = isGold ? 0.2 : 0.8;
+
+                    if (randomSize > 0.98) {
+                        targetSizes[i] = 0.3;
+                    } else if (randomSize > 0.9) {
+                        targetSizes[i] = 0.15;
+                    } else {
+                        targetSizes[i] = 0.045;
+                    }
+                } else {
+                    const r = 100 + Math.random() * 150;
+                    const theta = Math.random() * Math.PI * 2;
+
+                    targetPositions[i3] = r * Math.cos(theta);
+                    targetPositions[i3 + 1] = (Math.random() - 0.5) * 300;
+                    targetPositions[i3 + 2] = r * Math.sin(theta);
+
+                    targetColors[i3] = 0.05;
+                    targetColors[i3 + 1] = 0.2;
+                    targetColors[i3 + 2] = 0.3;
+                    targetSizes[i] = 0.06;
+                }
+            }
+
+            renderModelList();
+        }
+
+        function renderModelList() {
+            modelList.innerHTML = "";
+
+            models.forEach((model, index) => {
+                const button = document.createElement("button");
+                button.type = "button";
+                button.className = "model-item" + (index === activeModelIndex ? " active" : "");
+                button.textContent = model.name;
+                button.addEventListener("click", () => reconstructModel(index));
+                modelList.appendChild(button);
+            });
+        }
+
+        function setStatus(text) {
+            statusText.textContent = text;
+        }
+
+        function onResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            composer.setSize(window.innerWidth, window.innerHeight);
+        }
+    </script>
+</body>
+</html>
