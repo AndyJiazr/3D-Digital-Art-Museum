@@ -13,6 +13,9 @@
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/CopyShader.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/LuminosityHighPassShader.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/UnrealBloomPass.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"></script>
     <style>
         :root {
             --bg: #000406;
@@ -159,17 +162,140 @@
             word-break: break-all;
         }
 
+        .asset-row {
+            position: relative;
+        }
+
+        .asset-header {
+            display: flex;
+            align-items: stretch;
+            gap: 10px;
+        }
+
+        .asset-content {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .model-toggle {
+            width: 34px;
+            min-width: 34px;
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            background: linear-gradient(180deg, rgba(12, 18, 24, 0.95), rgba(4, 8, 12, 0.98));
+            color: rgba(255, 255, 255, 0.88);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.25s ease, border-color 0.25s ease;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
+        }
+
+        .model-toggle:hover {
+            background: linear-gradient(180deg, rgba(25, 33, 40, 0.98), rgba(8, 12, 16, 0.99));
+            border-color: rgba(0, 255, 204, 0.35);
+        }
+
+        .model-toggle-icon {
+            font-size: 18px;
+            line-height: 1;
+            transition: transform 0.25s ease;
+        }
+
+        .asset-row.drawer-open .model-toggle-icon {
+            transform: rotate(180deg);
+        }
+
+        .model-drawer {
+            position: fixed;
+            top: 24px;
+            left: calc(24px + min(360px, calc(100vw - 48px)) + 14px);
+            width: min(280px, calc(100vw - min(360px, calc(100vw - 48px)) - 62px));
+            max-height: min(62vh, calc(100vh - 48px));
+            padding: 16px;
+            border-radius: 20px;
+            background: linear-gradient(135deg, rgba(6, 10, 14, 0.9), rgba(10, 18, 24, 0.78));
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(18px);
+            box-shadow: 0 18px 48px rgba(0, 0, 0, 0.34);
+            z-index: 11;
+            opacity: 0;
+            transform: translateX(-14px);
+            pointer-events: none;
+            transition: opacity 0.28s ease, transform 0.28s ease;
+        }
+
+        .model-drawer.open {
+            opacity: 1;
+            transform: translateX(0);
+            pointer-events: auto;
+        }
+
+        .model-drawer-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 14px;
+            margin-bottom: 12px;
+        }
+
+        .model-drawer-title {
+            margin: 0;
+            font-size: 13px;
+            letter-spacing: 0.16em;
+            color: var(--muted);
+            text-transform: uppercase;
+        }
+
+        .model-drawer-close {
+            width: 32px;
+            height: 32px;
+            border-radius: 999px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            background: rgba(255, 255, 255, 0.04);
+            color: var(--text);
+            cursor: pointer;
+            transition: 0.25s ease;
+        }
+
+        .model-drawer-close:hover {
+            border-color: rgba(0, 255, 204, 0.42);
+            background: rgba(0, 255, 204, 0.08);
+        }
+
         .model-list {
-            margin-top: 14px;
             display: grid;
             gap: 8px;
-            max-height: 220px;
+            max-height: calc(min(62vh, calc(100vh - 48px)) - 78px);
             overflow-y: auto;
+            padding-right: 6px;
+            scrollbar-width: thin;
+            scrollbar-color: #000 rgba(255, 255, 255, 0.08);
+        }
+
+        .model-list::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .model-list::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.06);
+            border-radius: 999px;
+        }
+
+        .model-list::-webkit-scrollbar-thumb {
+            background: linear-gradient(180deg, #111, #000);
+            border-radius: 999px;
+            border: 1px solid rgba(255, 255, 255, 0.14);
+        }
+
+        .model-list::-webkit-scrollbar-thumb:hover {
+            background: linear-gradient(180deg, #222, #060606);
         }
 
         .model-item {
             width: 100%;
-            padding: 12px 14px;
+            padding: 12px 12px 12px 14px;
             border-radius: 14px;
             border: 1px solid rgba(255, 255, 255, 0.08);
             background: rgba(255, 255, 255, 0.03);
@@ -177,12 +303,110 @@
             text-align: left;
             cursor: pointer;
             transition: 0.25s ease;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
         }
 
         .model-item:hover,
         .model-item.active {
             border-color: rgba(0, 255, 204, 0.42);
             background: rgba(0, 255, 204, 0.08);
+        }
+
+        .model-item-name {
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .model-delete {
+            width: 26px;
+            height: 26px;
+            min-width: 26px;
+            border-radius: 999px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            background: rgba(0, 0, 0, 0.26);
+            color: rgba(255, 255, 255, 0.72);
+            cursor: pointer;
+            transition: 0.25s ease;
+        }
+
+        .model-delete:hover {
+            border-color: rgba(255, 92, 92, 0.62);
+            background: rgba(255, 92, 92, 0.16);
+            color: #fff;
+        }
+
+        .artifact-description {
+            position: fixed;
+            top: 50%;
+            right: 24px;
+            width: min(360px, calc(100vw - 48px));
+            max-height: min(58vh, 560px);
+            padding: 22px;
+            border-radius: 24px;
+            background: linear-gradient(135deg, rgba(6, 10, 14, 0.88), rgba(10, 18, 24, 0.78));
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(22px);
+            box-shadow: 0 24px 70px rgba(0, 0, 0, 0.4);
+            z-index: 10;
+            opacity: 0;
+            transform: translate(18px, -50%);
+            pointer-events: none;
+            transition: opacity 0.28s ease, transform 0.28s ease;
+        }
+
+        .artifact-description.visible {
+            opacity: 1;
+            transform: translate(0, -50%);
+            pointer-events: auto;
+        }
+
+        .description-kicker {
+            margin-bottom: 10px;
+            font-size: 10px;
+            letter-spacing: 0.22em;
+            color: var(--gold);
+            text-transform: uppercase;
+        }
+
+        .description-title {
+            margin: 0 0 14px;
+            padding-bottom: 14px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+            font-size: 20px;
+            font-weight: 300;
+            letter-spacing: 0.08em;
+            color: var(--text);
+        }
+
+        .description-body {
+            max-height: calc(min(58vh, 560px) - 112px);
+            overflow-y: auto;
+            padding-right: 6px;
+            font-size: 13px;
+            line-height: 1.85;
+            color: var(--muted);
+            scrollbar-width: thin;
+            scrollbar-color: #000 rgba(255, 255, 255, 0.08);
+        }
+
+        .description-body::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .description-body::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.06);
+            border-radius: 999px;
+        }
+
+        .description-body::-webkit-scrollbar-thumb {
+            background: linear-gradient(180deg, #111, #000);
+            border-radius: 999px;
+            border: 1px solid rgba(255, 255, 255, 0.14);
         }
 
         .tips {
@@ -226,6 +450,126 @@
             letter-spacing: 0.08em;
         }
 
+        .gesture-panel {
+            position: fixed;
+            left: calc(24px + min(360px, calc(100vw - 48px)) + 14px);
+            bottom: 24px;
+            width: 220px;
+            border-radius: 20px;
+            overflow: hidden;
+            background: rgba(10, 18, 24, 0.78);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            backdrop-filter: blur(18px);
+            z-index: 12;
+            box-shadow: 0 18px 48px rgba(0, 0, 0, 0.34);
+        }
+
+        .gesture-camera {
+            position: relative;
+            height: 150px;
+            background: rgba(0, 0, 0, 0.28);
+        }
+
+        .gesture-camera video,
+        .gesture-camera canvas {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .gesture-camera video {
+            opacity: 0.28;
+            filter: grayscale(1);
+            transform: scaleX(-1);
+        }
+
+        .gesture-camera canvas {
+            transform: scaleX(-1);
+        }
+
+        .gesture-loading {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(0, 0, 0, 0.38);
+            color: var(--muted);
+            font-size: 12px;
+            letter-spacing: 0.08em;
+        }
+
+        .gesture-loading.hidden {
+            display: none;
+        }
+
+        .gesture-status {
+            position: relative;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            min-height: 52px;
+            padding: 12px 14px 14px;
+        }
+
+        .gesture-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 999px;
+            background: #b42323;
+        }
+
+        .gesture-dot.active {
+            background: var(--cyan);
+            box-shadow: 0 0 12px rgba(0, 255, 204, 0.8);
+        }
+
+        .gesture-meta {
+            min-width: 0;
+        }
+
+        .gesture-label {
+            margin-bottom: 3px;
+            font-size: 9px;
+            letter-spacing: 0.18em;
+            color: var(--muted);
+            text-transform: uppercase;
+        }
+
+        .gesture-name {
+            font-size: 12px;
+            color: var(--cyan);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .gesture-progress {
+            position: absolute;
+            left: 0;
+            bottom: 0;
+            width: 0%;
+            height: 3px;
+            background: var(--cyan);
+            box-shadow: 0 0 10px rgba(0, 255, 204, 0.8);
+            transition: width 0.1s linear;
+        }
+
+        @media (max-width: 1024px) {
+            .model-drawer {
+                left: auto;
+                right: 24px;
+                width: min(280px, calc(100vw - 48px));
+            }
+
+            .gesture-panel {
+                left: auto;
+                right: 24px;
+            }
+        }
+
         @media (max-width: 768px) {
             .panel {
                 top: 16px;
@@ -237,6 +581,52 @@
             .title {
                 font-size: 22px;
                 letter-spacing: 0.22em;
+            }
+
+            .model-drawer {
+                top: auto;
+                left: 16px;
+                right: 16px;
+                bottom: 92px;
+                width: auto;
+                max-height: 50vh;
+                transform: translateY(18px);
+            }
+
+            .model-drawer.open {
+                transform: translateY(0);
+            }
+
+            .model-list {
+                max-height: calc(50vh - 82px);
+            }
+
+            .gesture-panel {
+                left: 16px;
+                bottom: 96px;
+                width: 160px;
+            }
+
+            .gesture-camera {
+                height: 108px;
+            }
+
+            .artifact-description {
+                top: auto;
+                left: 16px;
+                right: 16px;
+                bottom: 180px;
+                width: auto;
+                max-height: 36vh;
+                transform: translateY(18px);
+            }
+
+            .artifact-description.visible {
+                transform: translateY(0);
+            }
+
+            .description-body {
+                max-height: calc(36vh - 112px);
             }
 
             .tips {
@@ -256,11 +646,7 @@
         <div class="top-line"></div>
         <h1 class="title">Sanxingdui</h1>
         <p id="subtitle" class="subtitle">三星堆交互系统</p>
-        <p id="desc" class="desc">核心功能：1.星云待机效果。导入后可点击列表切换模型，也可以一键返回星云模式。
-                                 2.文物查看模式：通过鼠标拖拽和滚轮缩放，可以360度查看文物。
-                                 3.文物导入：支持导入 .obj 文件，支持批量导入。
-                                 4.文物预加载：支持预加载文物，支持批量预加载。
-        </p>
+        <p id="desc" class="desc">核心功能：1.星云粒子与文物粒子形态动态切换。<br>2.支持 OBJ 文物导入、预加载、列表切换与删除。<br>3.支持鼠标、滚轮和手势识别进行旋转、缩放与切换。<br>4.支持绿色、蓝色、橙色粒子主题与中英文界面。<br>5.支持 API 生成文物描述并随语言切换翻译。</p>
 
         <div class="controls">
             <label class="upload-label">
@@ -269,6 +655,7 @@
             </label>
             <button id="nebula-btn" class="button" type="button">切换到星云模式</button>
             <button id="artifact-mode-btn" class="button" type="button">文物查看模式：关闭</button>
+            <button id="color-theme-btn" class="button" type="button">粒子颜色：绿色</button>
             <button id="lang-btn" class="button" type="button">Language: English</button>
         </div>
 
@@ -277,14 +664,33 @@
                 <span id="status-label" class="meta-label">当前状态</span>
                 <span id="status-text" class="meta-value">星云待机模式</span>
             </div>
-            <div class="meta-item">
-                <span id="asset-label" class="meta-label">当前对象</span>
-                <span id="asset-name" class="meta-value">星云待机模式</span>
+            <div class="meta-item asset-row" id="asset-row">
+                <div class="asset-header">
+                    <div class="asset-content">
+                        <span id="asset-label" class="meta-label">当前对象</span>
+                        <span id="asset-name" class="meta-value">星云待机模式</span>
+                    </div>
+                    <button id="model-toggle" class="model-toggle" type="button" aria-expanded="false" aria-label="打开文物展示列表">
+                        <span class="model-toggle-icon">▶</span>
+                    </button>
+                </div>
             </div>
         </div>
-
-        <div id="model-list" class="model-list"></div>
     </section>
+
+    <aside id="model-drawer" class="model-drawer" aria-hidden="true">
+        <div class="model-drawer-header">
+            <h2 id="model-list-label" class="model-drawer-title">文物展示列表</h2>
+            <button id="model-drawer-close" class="model-drawer-close" type="button" aria-label="关闭文物展示列表">×</button>
+        </div>
+        <div id="model-list" class="model-list"></div>
+    </aside>
+
+    <aside id="artifact-description" class="artifact-description" aria-live="polite">
+        <div id="description-kicker" class="description-kicker">文物描述</div>
+        <h2 id="description-title" class="description-title">星云待机模式</h2>
+        <div id="description-body" class="description-body">请选择文物以查看描述。</div>
+    </aside>
 
     <div id="tips" class="tips">操作提示：按住鼠标左键旋转，滚轮缩放。支持点击上传，也支持将 .obj 文件直接拖入页面。</div>
 
@@ -292,10 +698,27 @@
         <div id="drop-box" class="drop-box">松开鼠标即可导入 OBJ 文件</div>
     </div>
 
+    <section class="gesture-panel" aria-label="手势识别控制面板">
+        <div class="gesture-camera">
+            <video id="input-video" playsinline muted></video>
+            <canvas id="output-canvas"></canvas>
+            <div id="gesture-loading" class="gesture-loading">启动摄像头...</div>
+        </div>
+        <div class="gesture-status">
+            <span id="vision-dot" class="gesture-dot"></span>
+            <div class="gesture-meta">
+                <div id="gesture-label" class="gesture-label">手势识别</div>
+                <div id="gesture-name" class="gesture-name">等待输入...</div>
+            </div>
+            <div id="gesture-progress" class="gesture-progress"></div>
+        </div>
+    </section>
+
     <script>
         const config = {
             count: 200000,
-            colors: { dark: 0x000406 }
+            colors: { dark: 0x000406 },
+            apiKey: "AIzaSyDkqdEiyWXJsCHAaK0dwjAcX6DgIUBuCJY"
         };
 
         let scene;
@@ -316,6 +739,43 @@
         let currentLang = "zh";
         let currentStatusKey = "nebulaMode";
         let currentStatusVars = null;
+        let okGestureStartTime = null;
+        let basePinchDist = null;
+        let baseScale = 1.0;
+        const gestureSwitchDelay = 1500;
+        const colorThemes = [
+            {
+                key: "green",
+                labelZh: "绿色",
+                labelEn: "Green",
+                artifactBase: [0.05, 0.95, 0.8],
+                artifactAccent: [1.0, 0.85, 0.2],
+                nebulaBase: [0.0, 0.4, 0.3],
+                nebulaAccent: [0.6, 0.5, 0.1],
+                halo: [0.05, 0.2, 0.3]
+            },
+            {
+                key: "blue",
+                labelZh: "蓝色",
+                labelEn: "Blue",
+                artifactBase: [0.08, 0.46, 1.0],
+                artifactAccent: [0.32, 0.9, 1.0],
+                nebulaBase: [0.02, 0.18, 0.55],
+                nebulaAccent: [0.2, 0.75, 1.0],
+                halo: [0.02, 0.12, 0.38]
+            },
+            {
+                key: "orange",
+                labelZh: "橙色",
+                labelEn: "Orange",
+                artifactBase: [1.0, 0.48, 0.08],
+                artifactAccent: [1.0, 0.82, 0.22],
+                nebulaBase: [0.52, 0.18, 0.02],
+                nebulaAccent: [1.0, 0.58, 0.08],
+                halo: [0.34, 0.12, 0.02]
+            }
+        ];
+        let colorThemeIndex = 0;
 
         let models = [];
         let activeModelIndex = -1;
@@ -323,38 +783,112 @@
             "assets/models/戴金面罩青铜人头像.obj"
         ];
         const modelNameDictionary = {
-            "戴金面罩青铜人头像": "Bronze Head with Gold Mask"
+            "戴金面罩青铜人头像": "Bronze Head with Gold Mask",
+            "青铜大立人像": "Bronze Standing Figure",
+            "青铜神树": "Bronze Sacred Tree",
+            "青铜纵目面具": "Bronze Mask with Protruding Eyes",
+            "青铜人头像": "Bronze Human Head",
+            "金面罩": "Gold Mask",
+            "金杖": "Gold Scepter",
+            "玉璋": "Jade Zhang Blade",
+            "玉琮": "Jade Cong",
+            "玉戈": "Jade Dagger-Axe",
+            "陶盉": "Pottery He Vessel",
+            "陶三足炊器": "Tripod Pottery Cooker"
         };
+
+        const modelNameTermDictionary = [
+            ["戴金面罩", "with Gold Mask"],
+            ["金面罩", "Gold Mask"],
+            ["青铜", "Bronze"],
+            ["人头像", "Human Head"],
+            ["大立人", "Standing Figure"],
+            ["立人", "Standing Figure"],
+            ["神树", "Sacred Tree"],
+            ["纵目", "Protruding Eyes"],
+            ["面具", "Mask"],
+            ["头像", "Head"],
+            ["人像", "Figure"],
+            ["兽面", "Animal Mask"],
+            ["鸟", "Bird"],
+            ["龙", "Dragon"],
+            ["虎", "Tiger"],
+            ["蛇", "Snake"],
+            ["太阳", "Sun"],
+            ["神坛", "Altar"],
+            ["金杖", "Gold Scepter"],
+            ["金", "Gold"],
+            ["玉璋", "Jade Zhang Blade"],
+            ["玉琮", "Jade Cong"],
+            ["玉戈", "Jade Dagger-Axe"],
+            ["玉", "Jade"],
+            ["陶", "Pottery"],
+            ["器", "Vessel"],
+            ["残件", "Fragment"]
+        ];
 
         const targetPositions = new Float32Array(config.count * 3);
         const targetColors = new Float32Array(config.count * 3);
         const targetSizes = new Float32Array(config.count);
 
         const fileInput = document.getElementById("file-input");
+        const assetRow = document.getElementById("asset-row");
+        const modelDrawer = document.getElementById("model-drawer");
+        const modelDrawerClose = document.getElementById("model-drawer-close");
+        const modelToggle = document.getElementById("model-toggle");
         const modelList = document.getElementById("model-list");
+        const modelListLabel = document.getElementById("model-list-label");
         const statusText = document.getElementById("status-text");
         const assetName = document.getElementById("asset-name");
         const nebulaBtn = document.getElementById("nebula-btn");
         const artifactModeBtn = document.getElementById("artifact-mode-btn");
+        const colorThemeBtn = document.getElementById("color-theme-btn");
         const langBtn = document.getElementById("lang-btn");
         const subtitle = document.getElementById("subtitle");
         const desc = document.getElementById("desc");
         const uploadText = document.getElementById("upload-text");
         const statusLabel = document.getElementById("status-label");
         const assetLabel = document.getElementById("asset-label");
+        const gestureLabel = document.getElementById("gesture-label");
+        const gestureName = document.getElementById("gesture-name");
+        const visionDot = document.getElementById("vision-dot");
+        const gestureProgress = document.getElementById("gesture-progress");
+        const gestureLoading = document.getElementById("gesture-loading");
+        const inputVideo = document.getElementById("input-video");
+        const outputCanvas = document.getElementById("output-canvas");
+        const artifactDescription = document.getElementById("artifact-description");
+        const descriptionKicker = document.getElementById("description-kicker");
+        const descriptionTitle = document.getElementById("description-title");
+        const descriptionBody = document.getElementById("description-body");
         const tips = document.getElementById("tips");
         const dropBox = document.getElementById("drop-box");
         const dropMask = document.getElementById("drop-mask");
+        const panel = document.querySelector(".panel");
         const i18n = {
             zh: {
                 subtitle: "三星堆交互系统",
-                desc: "核心功能：1.星云待机效果。导入后可点击列表切换模型，也可以一键返回星云模式。<br>2.文物查看模式：通过鼠标拖拽和滚轮缩放，可以360度查看文物。<br>3.文物导入：支持导入 .obj 文件，支持批量导入。<br>4.文物预加载：支持预加载文物，支持批量预加载。",
+                desc: "核心功能：1.星云粒子与文物粒子形态动态切换。<br>2.支持 OBJ 文物导入、预加载、列表切换与删除。<br>3.支持鼠标、滚轮和手势识别进行旋转、缩放与切换。<br>4.支持绿色、蓝色、橙色粒子主题与中英文界面。<br>5.支持 API 生成文物描述并随语言切换翻译。",
                 upload: "导入 OBJ 文件",
                 nebulaBtn: "切换到星云模式",
                 langBtn: "Language: English",
+                colorThemePrefix: "粒子颜色：",
                 statusLabel: "当前状态",
                 assetLabel: "当前对象",
-                tips: "操作提示：按住鼠标左键旋转，滚轮缩放。支持点击上传，也支持将 .obj 文件直接拖入页面。",
+                modelListLabel: "文物展示列表",
+                gestureLabel: "手势识别",
+                gestureWaiting: "等待输入...",
+                gestureActive: "手势交互中",
+                gestureScaling: "平滑缩放中...",
+                gestureSwitching: "即将切换模型...",
+                gestureCameraError: "摄像头不可用",
+                gestureLoading: "启动摄像头...",
+                descriptionKicker: "文物描述",
+                descriptionEmptyTitle: "星云待机模式",
+                descriptionEmptyBody: "请选择文物以查看描述。",
+                descriptionLoading: "正在生成文物描述...",
+                descriptionApiKeyMissing: "请先在 config.apiKey 中填入 API Key，即可自动生成文物描述。",
+                descriptionFallback: "这件文物承载着古蜀文明的神秘想象。它的造型、纹饰与材质共同呈现了三星堆祭祀文化中人与神、自然与权力之间的联系。",
+                tips: "操作提示：按住鼠标左键旋转，滚轮缩放。手势：张开拇指和食指缩放，左右移动手掌旋转，OK 手势停留 1.5 秒切换文物。",
                 dropBox: "松开鼠标即可导入 OBJ 文件",
                 artifactModePrefix: "文物查看模式：",
                 on: "开启",
@@ -372,13 +906,28 @@
             },
             en: {
                 subtitle: "Sanxingdui Interactive System",
-                desc: "Core features: 1. Nebula idle effect. After import, click the list to switch models and quickly return to nebula mode.<br>2. Artifact view mode: drag and wheel to inspect artifacts in detail.<br>3. OBJ import: supports importing .obj files, including batch import.<br>4. OBJ preload: supports preloading artifacts, including batch preload.",
+                desc: "Core features: 1. Dynamic morphing between nebula particles and artifact particle forms.<br>2. Supports OBJ import, preset preload, list switching, and artifact deletion.<br>3. Supports mouse, wheel, and hand gestures for rotation, zooming, and switching.<br>4. Supports green, blue, and orange particle themes with bilingual UI.<br>5. Supports API-generated artifact descriptions with language-aware translation.",
                 upload: "Import OBJ Files",
                 nebulaBtn: "Switch to Nebula Mode",
                 langBtn: "Language: 中文",
+                colorThemePrefix: "Particle Color: ",
                 statusLabel: "Current Status",
                 assetLabel: "Current Asset",
-                tips: "Tips: Hold left mouse button to rotate and use the wheel to zoom. You can click to upload or drag .obj files into the page.",
+                modelListLabel: "Artifact Gallery",
+                gestureLabel: "Hand Tracking",
+                gestureWaiting: "Waiting...",
+                gestureActive: "Gesture control active",
+                gestureScaling: "Smooth zooming...",
+                gestureSwitching: "Switching artifact soon...",
+                gestureCameraError: "Camera unavailable",
+                gestureLoading: "Starting camera...",
+                descriptionKicker: "Artifact Description",
+                descriptionEmptyTitle: "Nebula Idle Mode",
+                descriptionEmptyBody: "Select an artifact to view its description.",
+                descriptionLoading: "Generating artifact description...",
+                descriptionApiKeyMissing: "Add your API key to config.apiKey to generate artifact descriptions automatically.",
+                descriptionFallback: "This artifact carries the mysterious imagination of the ancient Shu civilization. Its form, decoration, and material together reveal the relationship between people, spirits, nature, and ritual power in Sanxingdui culture.",
+                tips: "Tips: drag to rotate and wheel to zoom. Gestures: spread thumb/index to zoom, move palm left/right to rotate, hold OK for 1.5s to switch artifacts.",
                 dropBox: "Release mouse to import OBJ files",
                 artifactModePrefix: "Artifact View Mode: ",
                 on: "On",
@@ -400,12 +949,14 @@
         bindEvents();
         applyLanguage();
         preloadPresetModels();
+        initVision();
 
         function initApp() {
             scene = new THREE.Scene();
             scene.background = new THREE.Color(config.colors.dark);
 
             camera = new THREE.PerspectiveCamera(25, window.innerWidth / window.innerHeight, 0.1, 2000);
+            updateDefaultCameraAnchor();
             camera.position.copy(defaultCameraPosition);
 
             renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
@@ -555,6 +1106,25 @@
                 applyLanguage();
             });
 
+            colorThemeBtn.addEventListener("click", () => {
+                colorThemeIndex = (colorThemeIndex + 1) % colorThemes.length;
+                updateColorThemeButton();
+                if (activeModelIndex === -1) {
+                    setNebulaMode();
+                } else {
+                    reconstructModel(activeModelIndex);
+                }
+            });
+
+            modelToggle.addEventListener("click", toggleModelDrawer);
+            modelDrawerClose.addEventListener("click", closeModelDrawer);
+
+            window.addEventListener("keydown", (event) => {
+                if (event.key === "Escape") {
+                    closeModelDrawer();
+                }
+            });
+
             window.addEventListener("dragover", (event) => {
                 event.preventDefault();
                 dropMask.classList.add("active");
@@ -619,21 +1189,24 @@
             targetScale = 1.0;
             assetName.textContent = t("nebulaMode");
             setStatusByKey("nebulaMode");
+            clearArtifactDescription();
 
             for (let i = 0; i < config.count; i++) {
                 const i3 = i * 3;
                 const r = 50 + Math.random() * 100;
                 const theta = Math.random() * Math.PI * 2;
                 const phi = Math.acos(Math.random() * 2 - 1);
-                const isGold = Math.random() > 0.85;
+                const theme = getCurrentColorTheme();
+                const isAccent = Math.random() > 0.85;
+                const color = isAccent ? theme.nebulaAccent : theme.nebulaBase;
 
                 targetPositions[i3] = r * Math.sin(phi) * Math.cos(theta);
                 targetPositions[i3 + 1] = r * Math.sin(phi) * Math.sin(theta);
                 targetPositions[i3 + 2] = r * Math.cos(phi);
 
-                targetColors[i3] = isGold ? 0.6 : 0.0;
-                targetColors[i3 + 1] = isGold ? 0.5 : 0.4;
-                targetColors[i3 + 2] = isGold ? 0.1 : 0.3;
+                targetColors[i3] = color[0];
+                targetColors[i3 + 1] = color[1];
+                targetColors[i3 + 2] = color[2];
                 targetSizes[i] = Math.random() < 0.05 ? 0.35 : 0.08;
             }
         }
@@ -744,6 +1317,7 @@
                 name,
                 nameZh: displayNames.zh,
                 nameEn: displayNames.en,
+                descriptions: {},
                 group
             };
             models.push(modelData);
@@ -760,6 +1334,7 @@
             activeModelIndex = index;
             assetName.textContent = getModelDisplayName(modelData);
             setStatusByKey("switchedModel");
+            updateArtifactDescription(modelData);
 
             const samplerPoints = [];
 
@@ -789,6 +1364,7 @@
             const maxAxis = Math.max(size.x, size.y, size.z) || 1;
             const scale = 55 / maxAxis;
             const bodyCount = Math.floor(config.count * 0.9);
+            const theme = getCurrentColorTheme();
 
             targetScale = 1.0;
 
@@ -798,16 +1374,17 @@
                 if (i < bodyCount) {
                     const point = samplerPoints[Math.floor(Math.random() * samplerPoints.length)];
                     const jitter = 0.02;
-                    const isGold = Math.random() > 0.75;
+                    const isAccent = Math.random() > 0.75;
+                    const color = isAccent ? theme.artifactAccent : theme.artifactBase;
                     const randomSize = Math.random();
 
                     targetPositions[i3] = (point.x - center.x) * scale + (Math.random() - 0.5) * jitter;
                     targetPositions[i3 + 1] = (point.y - center.y) * scale + (Math.random() - 0.5) * jitter;
                     targetPositions[i3 + 2] = (point.z - center.z) * scale + (Math.random() - 0.5) * jitter;
 
-                    targetColors[i3] = isGold ? 1.0 : 0.05;
-                    targetColors[i3 + 1] = isGold ? 0.85 : 0.95;
-                    targetColors[i3 + 2] = isGold ? 0.2 : 0.8;
+                    targetColors[i3] = color[0];
+                    targetColors[i3 + 1] = color[1];
+                    targetColors[i3 + 2] = color[2];
 
                     if (randomSize > 0.98) {
                         targetSizes[i] = 0.3;
@@ -824,9 +1401,9 @@
                     targetPositions[i3 + 1] = (Math.random() - 0.5) * 300;
                     targetPositions[i3 + 2] = r * Math.sin(theta);
 
-                    targetColors[i3] = 0.05;
-                    targetColors[i3 + 1] = 0.2;
-                    targetColors[i3 + 2] = 0.3;
+                    targetColors[i3] = theme.halo[0];
+                    targetColors[i3 + 1] = theme.halo[1];
+                    targetColors[i3 + 2] = theme.halo[2];
                     targetSizes[i] = 0.06;
                 }
             }
@@ -838,13 +1415,188 @@
             modelList.innerHTML = "";
 
             models.forEach((model, index) => {
-                const button = document.createElement("button");
-                button.type = "button";
-                button.className = "model-item" + (index === activeModelIndex ? " active" : "");
-                button.textContent = getModelDisplayName(model);
-                button.addEventListener("click", () => reconstructModel(index));
-                modelList.appendChild(button);
+                const item = document.createElement("button");
+                item.type = "button";
+                item.className = "model-item" + (index === activeModelIndex ? " active" : "");
+                item.addEventListener("click", () => reconstructModel(index));
+
+                const name = document.createElement("span");
+                name.className = "model-item-name";
+                name.textContent = getModelDisplayName(model);
+                name.title = getModelDisplayName(model);
+
+                const deleteButton = document.createElement("button");
+                deleteButton.type = "button";
+                deleteButton.className = "model-delete";
+                deleteButton.textContent = "×";
+                deleteButton.setAttribute("aria-label", (currentLang === "zh" ? "删除" : "Delete") + getModelDisplayName(model));
+                deleteButton.addEventListener("click", (event) => {
+                    event.stopPropagation();
+                    deleteModel(index);
+                });
+
+                item.appendChild(name);
+                item.appendChild(deleteButton);
+                modelList.appendChild(item);
             });
+        }
+
+        function deleteModel(index) {
+            if (!models[index]) {
+                return;
+            }
+
+            models.splice(index, 1);
+
+            if (models.length === 0) {
+                setNebulaMode();
+                renderModelList();
+                return;
+            }
+
+            if (index === activeModelIndex) {
+                const nextIndex = Math.min(index, models.length - 1);
+                reconstructModel(nextIndex);
+                return;
+            }
+
+            if (index < activeModelIndex) {
+                activeModelIndex -= 1;
+            }
+
+            renderModelList();
+        }
+
+        function toggleModelDrawer() {
+            setModelDrawerOpen(!modelDrawer.classList.contains("open"));
+        }
+
+        function closeModelDrawer() {
+            setModelDrawerOpen(false);
+        }
+
+        function setModelDrawerOpen(isOpen) {
+            modelDrawer.classList.toggle("open", isOpen);
+            assetRow.classList.toggle("drawer-open", isOpen);
+            modelDrawer.setAttribute("aria-hidden", String(!isOpen));
+            modelToggle.setAttribute("aria-expanded", String(isOpen));
+            modelToggle.setAttribute("aria-label", isOpen ? (currentLang === "zh" ? "关闭文物展示列表" : "Close artifact list") : (currentLang === "zh" ? "打开文物展示列表" : "Open artifact list"));
+            modelToggle.querySelector(".model-toggle-icon").textContent = isOpen ? "◀" : "▶";
+        }
+
+        function initVision() {
+            if (typeof Hands === "undefined" || typeof Camera === "undefined") {
+                gestureName.textContent = t("gestureCameraError");
+                gestureLoading.classList.add("hidden");
+                return;
+            }
+
+            const canvasCtx = outputCanvas.getContext("2d");
+            const hands = new Hands({ locateFile: (file) => "https://cdn.jsdelivr.net/npm/@mediapipe/hands/" + file });
+
+            hands.setOptions({
+                maxNumHands: 1,
+                modelComplexity: 1,
+                minDetectionConfidence: 0.7,
+                minTrackingConfidence: 0.7
+            });
+
+            hands.onResults((results) => {
+                gestureLoading.classList.add("hidden");
+                canvasCtx.save();
+                canvasCtx.clearRect(0, 0, outputCanvas.width, outputCanvas.height);
+
+                if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+                    visionDot.classList.add("active");
+                    const landmarks = results.multiHandLandmarks[0];
+
+                    drawConnectors(canvasCtx, landmarks, HAND_CONNECTIONS, { color: "#00ffff", lineWidth: 2 });
+                    drawLandmarks(canvasCtx, landmarks, { color: "#ffd700", lineWidth: 1, radius: 2 });
+                    handleGestureControl(landmarks);
+                } else {
+                    visionDot.classList.remove("active");
+                    gestureName.textContent = t("gestureWaiting");
+                    gestureProgress.style.width = "0%";
+                    okGestureStartTime = null;
+                    basePinchDist = null;
+                }
+
+                canvasCtx.restore();
+            });
+
+            const cameraPipe = new Camera(inputVideo, {
+                onFrame: async () => {
+                    outputCanvas.width = inputVideo.videoWidth || 320;
+                    outputCanvas.height = inputVideo.videoHeight || 240;
+                    await hands.send({ image: inputVideo });
+                },
+                width: 320,
+                height: 240
+            });
+
+            cameraPipe.start().catch((error) => {
+                console.error("Camera access error:", error);
+                gestureName.textContent = t("gestureCameraError");
+                gestureLoading.classList.add("hidden");
+            });
+        }
+
+        function handleGestureControl(landmarks) {
+            const distance = (firstIndex, secondIndex) => Math.hypot(
+                landmarks[firstIndex].x - landmarks[secondIndex].x,
+                landmarks[firstIndex].y - landmarks[secondIndex].y
+            );
+            const palmSize = distance(0, 5) || 0.1;
+            const pinchDistance = distance(4, 8);
+            const middleExtended = landmarks[12].y < landmarks[9].y;
+            const ringExtended = landmarks[16].y < landmarks[13].y;
+            const isFingersExtended = middleExtended && ringExtended;
+            const isOkGesture = pinchDistance < palmSize * 0.45 && middleExtended;
+
+            if (isFingersExtended && pinchDistance > palmSize * 0.8) {
+                if (basePinchDist === null) {
+                    basePinchDist = pinchDistance;
+                    baseScale = targetScale;
+                }
+                const scaleFactor = pinchDistance / basePinchDist;
+                targetScale = Math.max(0.3, Math.min(3.0, baseScale * scaleFactor));
+                gestureName.textContent = t("gestureScaling");
+            } else {
+                basePinchDist = null;
+            }
+
+            if (isOkGesture) {
+                gestureName.textContent = t("gestureSwitching");
+                if (!okGestureStartTime) {
+                    okGestureStartTime = Date.now();
+                }
+                const elapsed = Date.now() - okGestureStartTime;
+                const progress = Math.min(100, (elapsed / gestureSwitchDelay) * 100);
+                gestureProgress.style.width = progress + "%";
+
+                if (elapsed >= gestureSwitchDelay) {
+                    if (models.length > 0) {
+                        reconstructModel((activeModelIndex + 1) % models.length);
+                    } else {
+                        setNebulaMode();
+                    }
+                    okGestureStartTime = null;
+                    gestureProgress.style.width = "0%";
+                }
+            } else {
+                okGestureStartTime = null;
+                gestureProgress.style.width = "0%";
+                if (basePinchDist === null) {
+                    gestureName.textContent = t("gestureActive");
+                }
+            }
+
+            if (!isArtifactViewMode) {
+                currentRotationY += (landmarks[0].x - 0.5) * 0.08;
+            } else {
+                camera.position.x += (landmarks[0].x - 0.5) * 0.35;
+                camera.position.y += (0.5 - landmarks[0].y) * 0.24;
+            }
         }
 
         function hasChineseText(text) {
@@ -857,19 +1609,123 @@
                 return { zh: zhName, en: name };
             }
 
-            const mappedName = modelNameDictionary[name];
+            const normalizedName = name.replace(/[\s_\-（）()\[\]【】]/g, "");
+            const mappedName = modelNameDictionary[name] || modelNameDictionary[normalizedName];
             if (mappedName) {
                 return { zh: zhName, en: mappedName };
             }
 
+            const translatedName = translateChineseModelName(normalizedName);
             return {
                 zh: zhName,
-                en: "Imported Artifact " + modelOrder
+                en: translatedName || ("Sanxingdui Artifact " + modelOrder)
             };
+        }
+
+        function translateChineseModelName(name) {
+            let remainingName = name;
+            const translatedParts = [];
+
+            modelNameTermDictionary.forEach(([zhTerm, enTerm]) => {
+                if (remainingName.includes(zhTerm)) {
+                    translatedParts.push(enTerm);
+                    remainingName = remainingName.replaceAll(zhTerm, "");
+                }
+            });
+
+            const uniqueParts = [...new Set(translatedParts)];
+            if (uniqueParts.length === 0) {
+                return "";
+            }
+
+            return uniqueParts.join(" ");
         }
 
         function getModelDisplayName(modelData) {
             return currentLang === "en" ? (modelData.nameEn || modelData.name) : (modelData.nameZh || modelData.name);
+        }
+
+        function clearArtifactDescription() {
+            artifactDescription.classList.remove("visible");
+            descriptionKicker.textContent = t("descriptionKicker");
+            descriptionTitle.textContent = t("descriptionEmptyTitle");
+            descriptionBody.textContent = t("descriptionEmptyBody");
+            updateDefaultCameraAnchor();
+            if (!isArtifactViewMode) {
+                camera.position.copy(defaultCameraPosition);
+            }
+        }
+
+        async function updateArtifactDescription(modelData) {
+            artifactDescription.classList.add("visible");
+            updateDefaultCameraAnchor();
+            if (!isArtifactViewMode) {
+                camera.position.copy(defaultCameraPosition);
+            }
+            descriptionKicker.textContent = t("descriptionKicker");
+            descriptionTitle.textContent = getModelDisplayName(modelData);
+
+            if (modelData.descriptions && modelData.descriptions[currentLang]) {
+                descriptionBody.textContent = modelData.descriptions[currentLang];
+                return;
+            }
+
+            descriptionBody.textContent = t("descriptionLoading");
+            const description = await generateArtifactDescription(modelData, currentLang);
+
+            if (!modelData.descriptions) {
+                modelData.descriptions = {};
+            }
+            modelData.descriptions[currentLang] = description;
+
+            if (models[activeModelIndex] === modelData && currentLang in modelData.descriptions) {
+                descriptionTitle.textContent = getModelDisplayName(modelData);
+                descriptionBody.textContent = modelData.descriptions[currentLang];
+            }
+        }
+
+        async function generateArtifactDescription(modelData, lang) {
+            if (!config.apiKey) {
+                return t("descriptionApiKeyMissing");
+            }
+
+            const displayName = lang === "en" ? (modelData.nameEn || modelData.name) : (modelData.nameZh || modelData.name);
+            const prompt = lang === "en"
+                ? "Write a concise, vivid museum-style description in English for this Sanxingdui artifact: " + displayName + ". Mention its possible material, cultural meaning, and ritual atmosphere in about 120 words."
+                : "请用中文为三星堆文物“" + displayName + "”写一段简洁、有博物馆展陈感的介绍，说明它可能的材质、文化含义和祭祀氛围，控制在150字以内。";
+
+            try {
+                const response = await fetch("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=" + encodeURIComponent(config.apiKey), {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        contents: [{ parts: [{ text: prompt }] }]
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error("Description API request failed");
+                }
+
+                const data = await response.json();
+                return data?.candidates?.[0]?.content?.parts?.[0]?.text || t("descriptionFallback");
+            } catch (error) {
+                console.error(error);
+                return t("descriptionFallback");
+            }
+        }
+
+        function getCurrentColorTheme() {
+            return colorThemes[colorThemeIndex] || colorThemes[0];
+        }
+
+        function getColorThemeLabel() {
+            const theme = getCurrentColorTheme();
+            return currentLang === "en" ? theme.labelEn : theme.labelZh;
+        }
+
+        function updateColorThemeButton() {
+            colorThemeBtn.textContent = t("colorThemePrefix") + getColorThemeLabel();
         }
 
         function t(key, vars) {
@@ -894,8 +1750,16 @@
             uploadText.textContent = t("upload");
             nebulaBtn.textContent = t("nebulaBtn");
             langBtn.textContent = t("langBtn");
+            updateColorThemeButton();
             statusLabel.textContent = t("statusLabel");
             assetLabel.textContent = t("assetLabel");
+            modelListLabel.textContent = t("modelListLabel");
+            descriptionKicker.textContent = t("descriptionKicker");
+            gestureLabel.textContent = t("gestureLabel");
+            gestureLoading.textContent = t("gestureLoading");
+            if (!visionDot.classList.contains("active")) {
+                gestureName.textContent = t("gestureWaiting");
+            }
             tips.textContent = t("tips");
             dropBox.textContent = t("dropBox");
             updateArtifactModeButton();
@@ -907,8 +1771,15 @@
                 const activeModel = models[activeModelIndex];
                 if (activeModel) {
                     assetName.textContent = getModelDisplayName(activeModel);
+                    updateArtifactDescription(activeModel);
                 }
             }
+
+            if (activeModelIndex === -1) {
+                clearArtifactDescription();
+            }
+
+            setModelDrawerOpen(modelDrawer.classList.contains("open"));
             renderModelList();
         }
 
@@ -916,7 +1787,30 @@
             artifactModeBtn.textContent = t("artifactModePrefix") + (isArtifactViewMode ? t("on") : t("off"));
         }
 
+        function updateDefaultCameraAnchor() {
+            const panelRect = panel.getBoundingClientRect();
+            const descriptionRect = artifactDescription.classList.contains("visible")
+                ? artifactDescription.getBoundingClientRect()
+                : null;
+            const safeLeft = Math.min(panelRect.right + 24, window.innerWidth * 0.45);
+            const safeRight = descriptionRect
+                ? Math.max(descriptionRect.left - 24, safeLeft + window.innerWidth * 0.24)
+                : window.innerWidth - 24;
+            const targetScreenX = (safeLeft + safeRight) * 0.5;
+            const screenDelta = targetScreenX - window.innerWidth * 0.5;
+            const ndcOffset = screenDelta / (window.innerWidth * 0.5);
+
+            const vFov = THREE.MathUtils.degToRad(camera.fov);
+            const halfViewHeight = Math.tan(vFov / 2) * defaultCameraPosition.z;
+            const halfViewWidth = halfViewHeight * camera.aspect;
+
+            // 摄像机根据左侧控制面板和右侧描述框计算安全展示区，避免文物被描述框遮挡
+            defaultCameraPosition.x = -ndcOffset * halfViewWidth;
+            defaultCameraPosition.y = 0;
+        }
+
         function resetCameraToDefault() {
+            updateDefaultCameraAnchor();
             camera.position.copy(defaultCameraPosition);
             camera.updateProjectionMatrix();
         }
@@ -961,6 +1855,10 @@
         function onResize() {
             camera.aspect = window.innerWidth / window.innerHeight;
             camera.updateProjectionMatrix();
+            updateDefaultCameraAnchor();
+            if (!isArtifactViewMode) {
+                camera.position.copy(defaultCameraPosition);
+            }
             renderer.setSize(window.innerWidth, window.innerHeight);
             composer.setSize(window.innerWidth, window.innerHeight);
         }
